@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ESP32 MacroPad</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 3em; }
+    button { font-size: 1.5em; padding: 1em 2em; margin-top: 2em; }
+  </style>
+</head>
+<body>
+  <h1>ESP32 BLE MacroPad</h1>
+  <button id="connect">🔌 Connect to ESP32</button><br>
+  <button id="send" disabled>⌨️ Send CTRL+S</button>
+
+  <script>
+    let bleServer;
+    let bleService;
+    let bleCharacteristic;
+
+    const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+    const CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+    document.getElementById('connect').addEventListener('click', async () => {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'ESP32-S3-MacroPad' }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        bleServer = await device.gatt.connect();
+        bleService = await bleServer.getPrimaryService(SERVICE_UUID);
+        bleCharacteristic = await bleService.getCharacteristic(CHARACTERISTIC_UUID);
+
+        document.getElementById('send').disabled = false;
+        alert('✅ Connected to ESP32!');
+      } catch (error) {
+        alert('❌ ' + error);
+      }
+    });
+
+    document.getElementById('send').addEventListener('click', async () => {
+      const encoder = new TextEncoder();
+      const data = encoder.encode("CTRL+S");
+      await bleCharacteristic.writeValue(data);
+      alert('✅ Sent CTRL+S');
+    });
+  </script>
+</body>
+</html>
