@@ -1,49 +1,58 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>ESP32 MacroPad</title>
+  <meta charset="UTF-8">
+  <title>ESP32 BLE Web Control</title>
   <style>
-    body { font-family: sans-serif; text-align: center; margin-top: 3em; }
-    button { font-size: 1.5em; padding: 1em 2em; margin-top: 2em; }
+    body { font-family: sans-serif; margin: 2em; }
+    button { font-size: 1.2em; margin: 0.5em; padding: 0.5em 1em; }
   </style>
 </head>
 <body>
-  <h1>ESP32 BLE MacroPad</h1>
-  <button id="connect">🔌 Connect to ESP32</button><br>
-  <button id="send" disabled>⌨️ Send CTRL+S</button>
+  <h1>ESP32 BLE Control</h1>
+  <button onclick="connect()">🔗 Connect</button>
+  <button onclick="sendCommand('A')">Send A</button>
+  <button onclick="sendCommand('B')">Send B</button>
+  <pre id="log"></pre>
 
   <script>
-    let bleServer;
-    let bleService;
-    let bleCharacteristic;
+    let device, characteristic;
 
-    const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-    const CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+    function log(text) {
+      const logEl = document.getElementById('log');
+      logEl.textContent += text + '\n';
+    }
 
-    document.getElementById('connect').addEventListener('click', async () => {
+    async function connect() {
       try {
-        const device = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'ESP32-S3-MacroPad' }],
-          optionalServices: [SERVICE_UUID]
+        log('Requesting Bluetooth Device...');
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: 'ESP32S3 HID Bridge' }],
+          optionalServices: ['4fafc201-1fb5-459e-8fcc-c5c9c331914b'] // заміни UUID на свій
         });
 
-        bleServer = await device.gatt.connect();
-        bleService = await bleServer.getPrimaryService(SERVICE_UUID);
-        bleCharacteristic = await bleService.getCharacteristic(CHARACTERISTIC_UUID);
+        const server = await device.gatt.connect();
+        log('Connected to GATT Server');
 
-        document.getElementById('send').disabled = false;
-        alert('✅ Connected to ESP32!');
+        const service = await server.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
+        characteristic = await service.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8'); // UUID характеристики
+
+        log('Characteristic ready');
       } catch (error) {
-        alert('❌ ' + error);
+        log('❌ ' + error);
       }
-    });
+    }
 
-    document.getElementById('send').addEventListener('click', async () => {
+    async function sendCommand(command) {
+      if (!characteristic) {
+        log('Not connected to device');
+        return;
+      }
+
       const encoder = new TextEncoder();
-      const data = encoder.encode("CTRL+S");
-      await bleCharacteristic.writeValue(data);
-      alert('✅ Sent CTRL+S');
-    });
+      await characteristic.writeValue(encoder.encode(command));
+      log(`✅ Sent: ${command}`);
+    }
   </script>
 </body>
 </html>
