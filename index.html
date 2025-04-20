@@ -2,59 +2,183 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ESP32 BLE Web Control</title>
+  <title>BLE Control PWA</title>
   <style>
-    body { font-family: sans-serif; margin: 2em; }
-    button { font-size: 1.2em; margin: 0.5em; padding: 0.5em 1em; }
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #top-panel {
+      margin-bottom: 1rem;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      margin-right: 1rem;
+      font-size: 1rem;
+    }
+
+    #log {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #f4f4f4;
+      border: 1px solid #ccc;
+      white-space: pre-wrap;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    #button-grid {
+      flex-grow: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .cmd-btn {
+      font-size: 2rem;
+      aspect-ratio: 1 / 1;
+      width: 100%;
+      background-color: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .cmd-btn:hover {
+      background-color: #0d47a1;
+    }
+
+    .cmd-btn:active {
+      background-color: #1565c0;
+    }
   </style>
 </head>
 <body>
-  <h1>ESP32 BLE Control</h1>
-  <button onclick="connect()">🔗 Connect</button>
-  <button onclick="sendCommand('A')">Send A</button>
-  <button onclick="sendCommand('B')">Send B</button>
-  <button onclick="sendCommand('ENTER')">Send ENTER</button>
-  <button onclick="sendCommand('S')">Send S (Ctrl+S)</button>
-  <pre id="log"></pre>
+
+  <div id="top-panel">
+    <button id="connectBtn">Connect</button>
+    <button id="resetBtn">Reset UUID</button>
+  </div>
+
+  <div id="button-grid">
+    <button class="cmd-btn" data-cmd="1">1</button>
+    <button class="cmd-btn" data-cmd="2">2</button>
+    <button class="cmd-btn" data-cmd="3">3</button>
+    <button class="cmd-btn" data-cmd="4">4</button>
+    <button class="cmd-btn" data-cmd="5">5</button>
+    <button class="cmd-btn" data-cmd="6">6</button>
+  </div>
+
+  <div id="log"></div>
 
   <script>
-    let device, characteristic;
+    const connectBtn = document.getElementById('connectBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const logDiv = document.getElementById('log');
+    const cmdButtons = document.querySelectorAll('.cmd-btn');
 
-    function log(text) {
-      const logEl = document.getElementById('log');
-      logEl.textContent += text + '\n';
+    let bleDevice = null;
+    let bleCharacteristic = null;
+
+    function log(msg) {
+      console.log(msg);
+      logDiv.textContent += `\n${msg}`;
+      logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    async function connect() {
+    connectBtn.addEventListener('click', async () => {
       try {
-        log('Requesting Bluetooth Device...');
-        device = await navigator.bluetooth.requestDevice({
-          filters: [{ namePrefix: 'ESP32S3 HID Bridge' }],
-          optionalServices: ['4fafc201-1fb5-459e-8fcc-c5c9c331914b'] // заміни UUID на свій
-        });
+        const savedServiceUUID = localStorage.getItem('ble_service_uuid');
+        const savedCharUUID = localStorage.getItem('ble_char_uuid');
 
-        const server = await device.gatt.connect();
-        log('Connected to GATT Server');
-
-        const service = await server.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
-        characteristic = await service.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8'); // UUID характеристики
-
-        log('Characteristic ready');
-      } catch (error) {
-        log('❌ ' + error);
+        if (savedServiceUUID && savedCharUUID) {
+          log('🧠 Using saved UUIDs...');
+          await connectWithUUIDs(savedServiceUUID, savedCharUUID);
+        } else {
+          log('🔍 No saved UUIDs, scanning...');
+          await connectAndDiscover();
+        }
+      } catch (e) {
+        log(`❌ Connection error: ${e.message}`);
       }
+    });
+
+    resetBtn.addEventListener('click', () => {
+      localStorage.removeItem('ble_service_uuid');
+      localStorage.removeItem('ble_char_uuid');
+      log('♻️ UUIDs cleared from localStorage.');
+    });
+
+    cmdButtons.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const cmd = btn.getAttribute('data-cmd');
+        if (bleCharacteristic) {
+          const data = new TextEncoder().encode(cmd);
+          await bleCharacteristic.writeValue(data);
+          log(`📤 Sent: ${cmd}`);
+        } else {
+          log('⚠️ Not connected.');
+        }
+      });
+    });
+
+    async function connectAndDiscover() {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['battery_service']
+      });
+
+      bleDevice = device;
+      const server = await device.gatt.connect();
+
+      const services = await server.getPrimaryServices();
+      log(`🔎 Found ${services.length} services.`);
+
+      for (const service of services) {
+        const characteristics = await service.getCharacteristics();
+        for (const char of characteristics) {
+          if (char.properties.write || char.properties.notify || char.properties.read) {
+            bleCharacteristic = char;
+
+            localStorage.setItem('ble_service_uuid', service.uuid);
+            localStorage.setItem('ble_char_uuid', char.uuid);
+
+            log(`✅ Connected and saved UUIDs:
+Service: ${service.uuid}
+Characteristic: ${char.uuid}`);
+            return;
+          }
+        }
+      }
+
+      throw new Error('No usable characteristic found');
     }
 
-    async function sendCommand(command) {
-      if (!characteristic) {
-        log('Not connected to device');
-        return;
-      }
+    async function connectWithUUIDs(serviceUUID, charUUID) {
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [serviceUUID] }]
+      });
 
-      const encoder = new TextEncoder();
-      await characteristic.writeValue(encoder.encode(command));
-      log(`✅ Sent: ${command}`);
+      bleDevice = device;
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(serviceUUID);
+      const char = await service.getCharacteristic(charUUID);
+
+      bleCharacteristic = char;
+
+      log(`✅ Connected using saved UUIDs:
+Service: ${serviceUUID}
+Characteristic: ${charUUID}`);
     }
   </script>
+
 </body>
 </html>
