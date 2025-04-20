@@ -10,26 +10,39 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
+      box-sizing: border-box;
     }
 
     #top-panel {
       margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    #status {
+      font-weight: bold;
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+      font-size: 0.9rem;
+    }
+
+    #status.disconnected {
+      background-color: #eee;
+      color: #444;
+    }
+
+    #status.connected {
+      background-color: #4caf50;
+      color: white;
     }
 
     button {
       padding: 0.5rem 1rem;
-      margin-right: 1rem;
       font-size: 1rem;
-    }
-
-    #log {
-      margin-top: 1rem;
-      padding: 1rem;
-      background: #f4f4f4;
-      border: 1px solid #ccc;
-      white-space: pre-wrap;
-      max-height: 150px;
-      overflow-y: auto;
+      border-radius: 0.5rem;
+      border: none;
+      cursor: pointer;
     }
 
     #button-grid {
@@ -37,7 +50,8 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       grid-gap: 1rem;
-      margin-top: 1rem;
+      margin-bottom: 1rem;
+      padding-right: 1rem;
     }
 
     .cmd-btn {
@@ -48,8 +62,7 @@
       color: white;
       border: none;
       border-radius: 0.5rem;
-      cursor: pointer;
-      transition: background-color 0.2s;
+      transition: background-color 0.2s, transform 0.1s;
     }
 
     .cmd-btn:hover {
@@ -58,6 +71,17 @@
 
     .cmd-btn:active {
       background-color: #1565c0;
+      transform: scale(0.95);
+    }
+
+    #log {
+      background: #f4f4f4;
+      border: 1px solid #ccc;
+      padding: 1rem;
+      max-height: 120px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      border-radius: 0.5rem;
     }
   </style>
 </head>
@@ -66,15 +90,16 @@
   <div id="top-panel">
     <button id="connectBtn">Connect</button>
     <button id="resetBtn">Reset UUID</button>
+    <span id="status" class="disconnected">Disconnected</span>
   </div>
 
   <div id="button-grid">
-    <button class="cmd-btn" data-cmd="1">1</button>
-    <button class="cmd-btn" data-cmd="2">2</button>
-    <button class="cmd-btn" data-cmd="3">3</button>
-    <button class="cmd-btn" data-cmd="4">4</button>
-    <button class="cmd-btn" data-cmd="5">5</button>
-    <button class="cmd-btn" data-cmd="6">6</button>
+    <button class="cmd-btn" data-cmd="1">Text sample</button>
+    <button class="cmd-btn" data-cmd="2">123</button>
+    <button class="cmd-btn" data-cmd="3">A</button>
+    <button class="cmd-btn" data-cmd="4">B</button>
+    <button class="cmd-btn" data-cmd="5">X</button>
+    <button class="cmd-btn" data-cmd="6">CTRL+S</button>
   </div>
 
   <div id="log"></div>
@@ -84,6 +109,7 @@
     const resetBtn = document.getElementById('resetBtn');
     const logDiv = document.getElementById('log');
     const cmdButtons = document.querySelectorAll('.cmd-btn');
+    const status = document.getElementById('status');
 
     let bleDevice = null;
     let bleCharacteristic = null;
@@ -92,6 +118,18 @@
       console.log(msg);
       logDiv.textContent += `\n${msg}`;
       logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function updateStatus(connected) {
+      if (connected) {
+        status.textContent = 'Connected';
+        status.classList.remove('disconnected');
+        status.classList.add('connected');
+      } else {
+        status.textContent = 'Disconnected';
+        status.classList.remove('connected');
+        status.classList.add('disconnected');
+      }
     }
 
     connectBtn.addEventListener('click', async () => {
@@ -106,8 +144,10 @@
           log('🔍 No saved UUIDs, scanning...');
           await connectAndDiscover();
         }
+        updateStatus(true);
       } catch (e) {
         log(`❌ Connection error: ${e.message}`);
+        updateStatus(false);
       }
     });
 
