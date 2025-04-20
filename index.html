@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
   <title>BLE Control PWA</title>
   <style>
     body {
@@ -160,7 +159,7 @@
     cmdButtons.forEach(btn => {
       btn.addEventListener('click', async () => {
         const cmd = btn.getAttribute('data-cmd');
-        if (bleCharacteristic) {
+        if (bleCharacteristic) {    
           const data = new TextEncoder().encode(cmd);
           await bleCharacteristic.writeValue(data);
           log(`📤 Sent: ${cmd}`);
